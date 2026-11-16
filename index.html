@@ -1,0 +1,43 @@
+import os
+os.makedirs('output',exist_ok=True)
+html = r'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Legomen Rig Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#141820;color:#edf0f6;font:14px system-ui}header{padding:10px;background:#232b39}h2{font-size:16px;margin:12px 0 6px}button,select,input{font:inherit;border-radius:7px;border:1px solid #526075;padding:9px;background:#29374c;color:white;max-width:100%}button{background:#235eb0;cursor:pointer}button:disabled{opacity:.4}label{display:inline-flex;gap:6px;align-items:center;margin:3px}input[type=number]{width:85px}input[type=range]{width:150px}#view{height:44dvh;min-height:240px;position:relative;touch-action:none}canvas{display:block}#panel{padding:10px 12px 50px}.row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}small{color:#b8c7de}#status{white-space:pre-wrap;background:#233044;padding:10px;margin:0}#uv{background:#0d1118;width:100%;max-width:420px;height:auto;border:1px solid #566}details{border-top:1px solid #455;margin-top:10px;padding-top:6px}a{color:#99c9ff}#boot{padding:12px;background:#493d24}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script></head><body>
+<header><b>Legomen Rig Studio</b> · iPhone web editor</header>
+<div id="boot">Loading 3D engine… Internet is required to load the engine. If this message stays here, refresh or check your connection.</div>
+<div id="view"></div><p id="status" role="status">Starting…</p>
+<div id="panel">
+<h2>1 · Import and project</h2><div class="row"><label>OBJ <input id="obj" type="file" accept=".obj"></label><label>Project <input id="project" type="file" accept=".json"></label><button id="save">Save editable project</button><button id="frame">Frame model</button></div>
+<small>Y is up. Import keeps geometry and UVs, not external OBJ materials/textures. Separate parts are detected by connected geometry. Save a project regularly; closing or refreshing this page loses unsaved work.</small>
+<h2>2 · Rigid part binding</h2><div class="row"><select id="parts"></select><select id="bones"></select><button id="assign">Bind selected part 100%</button></div>
+<small>Selected part is orange. Each vertex has exactly one bone influence at weight 1. Initial assignments and pivots are guesses: correct them before animating. L means character left (+X).</small>
+<div class="row"><label><input id="show" type="checkbox" checked>Show skeleton</label><button id="auto">Auto-assign parts again</button></div>
+<details open><summary>Edit selected joint pivot (rest pose)</summary><p>Move the joint to the actual shoulder, wrist, hip or neck. Editing pivots resets the preview to rest pose but keeps animation keys.</p><div class="row"><label>X <input id="px" type="number" step="0.01"></label><label>Y <input id="py" type="number" step="0.01"></label><label>Z <input id="pz" type="number" step="0.01"></label><button id="pivot">Apply pivot</button></div></details>
+<h2>3 · Pose and animate</h2><div id="rotation"></div><div class="row"><label>Seconds <input id="duration" type="number" min="0.1" max="120" step="0.1" value="2"></label><label>Time <input id="time" type="range" min="0" max="2" step="0.01" value="0"><span id="timeText">0.00</span></label></div>
+<div class="row"><button id="key">Key full pose</button><button id="deleteKey">Delete key here</button><button id="play">Play / pause</button><button id="rest">Rest pose</button><button id="clear">Clear animation</button></div><div id="keys"></div>
+<small>Set time, rotate a bone, then key the pose. Repeat at another time. All bones are keyed together. Playback interpolates rotations. For a loop, key the same pose at the start and end. Root translation below can be keyed too.</small>
+<div class="row"><label>Root X <input id="tx" type="number" step="0.05" value="0"></label><label>Y <input id="ty" type="number" step="0.05" value="0"></label><label>Z <input id="tz" type="number" step="0.05" value="0"></label><button id="move">Apply root offset</button></div>
+<h2>4 · UV layout</h2><div class="row"><button id="unwrap">Generate non-overlapping UVs</button><button id="restoreUV">Restore imported UVs</button></div>
+<small>Guaranteed-separated triangle cells inside one 0–1 tile, with padding. This is a conservative fallback, not an efficient joined-island unwrap: many seams and wasted space are expected. Existing texture alignment is lost when generating new UVs. Preview shows all parts.</small><canvas id="uv" width="512" height="512"></canvas>
+<h2>5 · Export</h2><div class="row"><button id="export">Export rigged animated GLB</button></div><div id="downloads"></div><small>Tap the resulting file link to save/share in Safari. Includes real skin weights, skeleton, UVs, and one animation clip if keyed. Does not include a painted texture. Internet is needed for this version; Home Screen installation does not make it offline.</small>
+</div>
+<script type="module">
+import * as T from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {OBJLoader} from 'three/addons/loaders/OBJLoader.js';
+import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+const $=id=>document.getElementById(id), msg=s=>$('status').textContent=s;
+window.addEventListener('error',e=>msg('Error: '+e.message));window.addEventListener('unhandledrejection',e=>msg('Error: '+(e.reason?.message||e.reason)));
+const scene=new T.Scene();scene.background=new T.Color('#17202d');const camera=new T.PerspectiveCamera(45,1,.001,10000);const renderer=new T.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));$('view').appendChild(renderer.domElement);const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+scene.add(new T.HemisphereLight(0xffffff,0x364456,2));const light=new T.DirectionalLight(0xffffff,2.5);light.position.set(4,9,7);scene.add(light);const grid=new T.GridHelper(12,24,0x637386,0x303e50);scene.add(grid);
+let asset=null,helper=null,skel=null,bones=[],parts=[],pivots=[],keys=[],playing=false,time=0,span=2,height=2;
+const names=['Root','Spine','Head','Arm_L','Hand_L','Arm_R','Hand_R','Leg_L','Leg_R'];const parents=[-1,0,1,1,3,1,5,0,0];
+function resize(){let w=$('view').clientWidth,h=$('view').clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}new ResizeObserver(resize).observe($('view'));
+function selected(){return Math.max(0,Number($('bones').value)||0)}
+function cleanup(){if(helper){scene.remove(helper);helper.dispose();helper=null}if(asset){scene.remove(asset);asset.traverse(o=>{if(o.isMesh){o.geometry.dispose();o.material.dispose()}})}asset=new T.Group();asset.name='Legomen';scene.add(asset);parts=[];bones=[];keys=[];playing=false;time=0;skel=null;}
+function connected(g){const p=g.attributes.position,n=p.count/3,parent=Array.from({length:n},(_,i)=>i),seen=new Map();function find(a){while(parent[a]!==a){parent[a]=parent[parent[a]];a=parent[a]}return a}for(let i=0;i<p.count;i++){let k=[p.getX(i),p.getY(i),p.getZ(i)].map(x=>Math.round(x*1e5)).join(',');let t=Math.floor(i/3);if(seen.has(k))parent[find(t)]=find(seen.get(k));else seen.set(k,t)}let groups=new Map();for(let t=0;t<n;t++){let r=find(t);if(!groups.has(r))groups.set(r,[]);groups.get(r).push(t)}return [...groups.values()].map(ts=>{let q=new T.BufferGeometry();for(const name of ['position','normal','uv']){let a=g.attributes[name];if(!a)continue;let arr=[];for(const t of ts)for(let c=0;c<3;c++)for(let j=0;j<a.itemSize;j++)arr.push(a.array[(3*t+c)*a.itemSize+j]);q.setAttribute(name,new T.Float32BufferAttribute(arr,a.itemSize))}if(!q.attributes.normal)q.computeVertexNormals();return q})}
+function addPart(g,name,bone=0,original=null){let m=new T.SkinnedMesh(g,new T.MeshStandardMaterial({color:0x9db5d0,roughness:.65,metalness:.05,side:T.DoubleSide}));m.name='Part_'+parts.length; m.frustumCulled=false;asset.add(m);parts.push({mesh:m,name,bone,original:original|| (g.attributes.uv?Array.from(g.attributes.uv.array):null)});}
+function makeRig(){bones
